@@ -5,14 +5,38 @@
 // 2014-07-04 GONG Chen <chen.sst@gmail.com>
 //
 
+#include <cstdint>
+#include <istream>
 #include <sstream>
+#include <streambuf>
+#include <marisa/iostream.h>
 #include <rime/common.h>
 #include <rime/dict/string_table.h>
 
 namespace rime {
 
+namespace {
+
+// A read-only view: MARISA copies the data into its own aligned storage.
+class ImageStreamBuf : public std::streambuf {
+ public:
+  ImageStreamBuf(const char* ptr, size_t size) {
+    char* begin = const_cast<char*>(ptr);
+    setg(begin, begin, begin + size);
+  }
+};
+
+}  // namespace
+
 StringTable::StringTable(const char* ptr, size_t size) {
-  trie_.map(ptr, size);
+  if (reinterpret_cast<std::uintptr_t>(ptr) % 8 == 0) {
+    trie_.map(ptr, size);
+  } else {
+    // Older files may place the image at an unaligned byte offset.
+    ImageStreamBuf buffer(ptr, size);
+    std::istream stream(&buffer);
+    marisa::read(stream, &trie_);
+  }
 }
 
 bool StringTable::HasKey(const string& key) {

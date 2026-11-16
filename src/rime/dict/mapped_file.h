@@ -99,6 +99,8 @@ class RIME_DLL MappedFile {
   template <class T>
   Array<T>* CreateArray(size_t array_size);
 
+  char* AllocateAlignedBytes(size_t count);
+
   String* CreateString(const string& str);
   bool CopyString(const string& src, String* dest);
 
@@ -149,6 +151,15 @@ T* MappedFile::Allocate(size_t count) {
   std::memset((void*)ptr, 0, required_space);
   size_ = used_space + required_space;
   return ptr;
+}
+
+inline char* MappedFile::AllocateAlignedBytes(size_t count) {
+  // MARISA images contain 64-bit values, including on 32-bit hosts.
+  constexpr size_t alignment = 8;
+  size_t padding = (alignment - size_ % alignment) % alignment;
+  if (padding && !Allocate<char>(padding))
+    return nullptr;
+  return Allocate<char>(count);
 }
 
 template <class T>
